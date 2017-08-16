@@ -1,69 +1,91 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
 public class Movement : MonoBehaviour
 {
-    private CharacterController character;
-    private Rigidbody rb;
-    public float forwardSpeed = 5;
-    public float backwardSpeed = 4;
-    public float sidewaySpeed = 4;
-    public float sprintSpeedMultiplier = 1.5f;
-    public float jumpForce = 30;
-    public bool isSprinting = false;
-    private float curSpeed;
-    // Use this for initialization
-    void Start()
+    public float sprintingMultiplier= 1.5f;
+    public float speed = 10.0f;
+    public float gravity = 10.0f;
+    public float maxVelocityChange = 10.0f;
+    public bool canJump = true;
+    public float jumpHeight = 2.0f;
+    private bool grounded = false;
+     new Rigidbody rigidbody;
+    public bool Sprinting = false;
+
+    void Awake()
     {
-        character = GetComponent<CharacterController>();
-        rb = GetComponent<Rigidbody>();
+        rigidbody = GetComponent<Rigidbody>();
+        rigidbody.freezeRotation = true;
+        rigidbody.useGravity = false;
     }
 
-   
-
-    // Update is called once per frame
     void Update()
     {
-       
-        if (character.isGrounded)
-        {
-            if (Input.GetKey(KeyCode.Space))
-            {
-                Vector3 up = transform.TransformDirection(Vector3.up);
-                float curJump = jumpForce * 1;
-                character.SimpleMove(up * curJump);
-            }
-        }
-
-
-        isSprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-
-        Vector3 forward = transform.TransformDirection(Vector3.forward);
-        Vector3 right = transform.TransformDirection(Vector3.right);
-
-        if (Input.GetAxis("Vertical") > 0)
-        {
-            //Going forward
-            if (isSprinting)
-            {
-                curSpeed = forwardSpeed * Input.GetAxis("Vertical");
-                curSpeed *= sprintSpeedMultiplier;
-            }
-            else
-                curSpeed = forwardSpeed * Input.GetAxis("Vertical");
-        }
-        else
-        {
-            //Going backwards
-            curSpeed = backwardSpeed * Input.GetAxis("Vertical");
-        }
-        character.SimpleMove(forward * curSpeed);
-
-        float curSpeed2 = sidewaySpeed * Input.GetAxis("Horizontal");
-        character.SimpleMove(right * curSpeed2);
+        Sprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
     }
 
-   
+    void FixedUpdate()
+    {
+        if (grounded)
+        {
+            // Calculate how fast we should be moving
+            Vector3 targetVelocity = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+            targetVelocity = transform.TransformDirection(targetVelocity);
+            if (Sprinting)
+                targetVelocity *= speed * sprintingMultiplier;
+            else
+                targetVelocity *= speed;
+
+            // Apply a force that attempts to reach our target velocity
+            Vector3 velocity = rigidbody.velocity;
+            Vector3 velocityChange = (targetVelocity - velocity);
+            velocityChange.x = Mathf.Clamp(velocityChange.x, -maxVelocityChange, maxVelocityChange);
+            velocityChange.z = Mathf.Clamp(velocityChange.z, -maxVelocityChange, maxVelocityChange);
+            velocityChange.y = 0;
+            rigidbody.AddForce(velocityChange, ForceMode.VelocityChange);
+
+            // Jump
+            if (canJump && Input.GetKeyDown(KeyCode.Space))
+            {
+                rigidbody.velocity = new Vector3(velocity.x, CalculateJumpVerticalSpeed(), velocity.z);
+            }
+        }else
+        {
+            // Calculate how fast we should be moving
+            Vector3 targetVelocity = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+            targetVelocity = transform.TransformDirection(targetVelocity);
+            targetVelocity *= speed / 2;
+
+            // Apply a force that attempts to reach our target velocity
+            Vector3 velocity = rigidbody.velocity;
+            Vector3 velocityChange = (targetVelocity - velocity);
+            velocityChange.x = Mathf.Clamp(velocityChange.x, -maxVelocityChange, maxVelocityChange);
+            velocityChange.z = Mathf.Clamp(velocityChange.z, -maxVelocityChange, maxVelocityChange);
+            velocityChange.y = 0;
+            rigidbody.AddForce(velocityChange, ForceMode.VelocityChange);
+
+        }
+
+        // We apply gravity manually for more tuning control
+        rigidbody.AddForce(new Vector3(0, -gravity * rigidbody.mass, 0));
+
+        grounded = false;
+    }
+
+    void OnCollisionStay()
+    {
+        grounded = true;
+    }
+
+    float CalculateJumpVerticalSpeed()
+    {
+        // From the jump height and gravity we deduce the upwards speed 
+        // for the character to reach at the apex.
+        return Mathf.Sqrt(2 * jumpHeight * gravity);
+    }
+
 }
     
